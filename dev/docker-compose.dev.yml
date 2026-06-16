@@ -1,0 +1,129 @@
+# Dev-mode override for the Saleor stack — lives in the workspace overlay (tracked),
+# NOT in the git-ignored saleor-platform/ child repo, so it travels to every machine.
+#
+# It is layered ON TOP of saleor-platform/docker-compose.yml:
+#
+#   docker compose -f saleor-platform/docker-compose.yml -f dev/docker-compose.dev.yml up --build
+#
+# Don't run that by hand — use ./bootstrap.sh (first run) or ./dev/dev.sh (day to day),
+# which set the API_PORT variable and wire the two files together for you.
+#
+# What it changes vs. the published-image setup:
+#   - api / worker : build from your local ../saleor checkout and bind-mount the
+#                    source, so Python edits are live (api runs uvicorn --reload).
+#   - dashboard    : swap the static nginx image for a Vite dev server that
+#                    bind-mounts ../saleor-dashboard, giving hot-module reload.
+#   - storefront   : add a Next.js dev server (not in the base file at all) that
+#                    bind-mounts ../storefront, giving hot reload for the shop.
+#
+# Ports: the host-facing API port is ${API_PORT:-8001}. We default to 8001 (not the
+# upstream 8000) because 8000 is commonly taken by other local stacks. bootstrap.sh
+# overrides API_PORT automatically if even 8001 is busy.
+#
+# Relative paths below resolve against the PROJECT DIRECTORY (saleor-platform/, the
+# dir of the first -f file); from there ../saleor etc. point at the sibling repos.
+
+services:
+  api:
+    image: saleor-local:dev
+    build:
+      context: ../saleor
+    # Container always listens on 8000 internally; only the published host port varies.
+    # !override replaces the base "8000:8000" mapping rather than appending to it.
+    ports: !override
+      - "${API_PORT:-8001}:8000"
+    environment:
+      # Allow the storefront's in-container SSR requests, which arrive with a
+      # host.docker.internal Host header, in addition to the base localhost/api hosts.
+      - ALLOWED_HOSTS=localhost,127.0.0.1,api,host.docker.internal
+    # uvicorn --reload watches the bind-mounted source and restarts on change.
+    # --reload is incompatible with multiple workers, so the worker count is dropped.
+    command:
+      - uvicorn
+      - saleor.asgi:application
+      - "--host=0.0.0.0"
+      - "--port=8000"
+      - "--reload"
+      - "--reload-dir=/app/saleor"
+      - "--lifespan=auto"
+      - "--ws=none"
+      - "--timeout-keep-alive=35"
+    volumes:
+      - ../saleor:/app
+      - saleor-media:/app/media
+
+  worker:
+    image: saleor-local:dev
+    build:
+      context: ../saleor
+    # Celery has no built-in autoreload; the source is mounted so edits are picked
+    # up on `./dev/dev.sh restart worker` (or a full `up`).
+    volumes:
+      - ../saleor:/app
+      - saleor-media:/app/media
+
+  dashboard:
+    image: node:24-alpine
+    working_dir: /app
+    # corepack pins pnpm, installs deps into the named volume, runs codegen against
+    # the committed schema (offline), then starts Vite with HMR on 9000.
+    command:
+      - sh
+      - -c
+      - >-
+        corepack enable &&
+        corepack prepare pnpm@10 --activate &&
+        pnpm install --frozen-lockfile &&
+        pnpm run generate:main &&
+        pnpm exec vite --host --port 9000
+    environment:
+      # Browser-reachable API URL (the dashboard is a pure SPA, so the browser on the
+      # host hits the published host port directly).
+      - API_URL=http://localhost:${API_PORT:-8001}/graphql/
+    # !override replaces the base "9000:80" mapping (which would otherwise double-bind).
+    ports: !override
+      - "9000:9000"
+    volumes:
+      - ../saleor-dashboard:/app
+      - dashboard-node-modules:/app/node_modules
+    networks:
+      - saleor-backend-tier
+
+  storefront:
+    image: node:24-alpine
+    working_dir: /app
+    depends_on:
+      - api
+    # host-gateway lets the container resolve host.docker.internal to the host on
+    # Linux too (Docker Desktop adds it automatically on Mac/Windows/WSL).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command:
+      - sh
+      - -c
+      - >-
+        corepack enable &&
+        pnpm install --frozen-lockfile &&
+        pnpm exec next dev --webpack -H 0.0.0.0 -p 3000
+    environment:
+      # The storefront renders server-side INSIDE this container, so it can't use
+      # "localhost" (that's the container). host.docker.internal reaches the host's
+      # published API port, and resolves on the host too so browser-side calls work.
+      # Product image URLs are absolute (from the API Site domain = localhost:API_PORT),
+      # so images load directly from the host in the browser.
+      - NEXT_PUBLIC_SALEOR_API_URL=http://host.docker.internal:${API_PORT:-8001}/graphql/
+      - NEXT_PUBLIC_STOREFRONT_URL=http://localhost:3000
+      - NEXT_PUBLIC_DEFAULT_CHANNEL=default-channel
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../storefront:/app
+      - storefront-node-modules:/app/node_modules
+      - storefront-next-cache:/app/.next
+    networks:
+      - saleor-backend-tier
+
+volumes:
+  dashboard-node-modules:
+  storefront-node-modules:
+  storefront-next-cache:

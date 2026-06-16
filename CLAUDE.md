@@ -24,9 +24,23 @@ risk surface.
 
 ## Running the stack
 
-`saleor-platform/` wires the services together with docker-compose. See its README
-for `docker compose up`. The dashboard and storefront point at the backend's GraphQL
-endpoint via their own env config.
+**One command from a fresh clone:** `./bootstrap.sh` — clones the child repos,
+builds from local source, migrates + seeds the DB, fixes image URLs, and starts the
+API, worker, dashboard, and storefront with live reload. It is idempotent.
+
+Day-to-day use `./dev/dev.sh` (`up`/`down`/`logs`/`restart`/`setup`). These layer
+`dev/docker-compose.dev.yml` on top of the upstream `saleor-platform/docker-compose.yml`
+so the stack runs from the local checkouts instead of published images. `dev/README.md`
+documents the override, ports, and the image-URL / storefront-SSR gotchas.
+
+Key facts for the agent:
+- The API host port defaults to **8001** (not 8000); browser-facing URLs and the
+  product-image Site domain are derived from it. If you query the API by hand, use
+  the port `bootstrap.sh` reported.
+- `saleor-platform/` is a git-ignored child repo — never edit its compose file to
+  change dev behavior; change `dev/docker-compose.dev.yml` (tracked) instead.
+- `scripts/create-workspace.sh` is a maintainer-only tool for spinning up a new
+  overlay from this one; it is not part of the normal run flow.
 
 ## Working guidance for the agent
 
