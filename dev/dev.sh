@@ -60,7 +60,7 @@ seed_if_needed() {
 
 fix_domain() {
   echo "→ Pointing API Site domain at localhost:${API_PORT} (so product image URLs resolve)..."
-  manage shell -c "from django.contrib.sites.models import Site; Site.objects.all().update(domain='localhost:${API_PORT}', name='Saleor')" >/dev/null
+  manage shell -c "from django.contrib.sites.models import Site; Site.objects.all().update(domain='localhost:${API_PORT}')" >/dev/null
 }
 
 cmd="${1:-up}"

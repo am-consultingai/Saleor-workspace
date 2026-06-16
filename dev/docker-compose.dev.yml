@@ -104,6 +104,9 @@ services:
       - >-
         corepack enable &&
         pnpm install --frozen-lockfile &&
+        echo "waiting for API before codegen..." &&
+        until wget -q -O /dev/null "http://host.docker.internal:${API_PORT:-8001}/graphql/"; do sleep 3; done &&
+        pnpm run generate:all &&
         pnpm exec next dev --webpack -H 0.0.0.0 -p 3000
     environment:
       # The storefront renders server-side INSIDE this container, so it can't use
