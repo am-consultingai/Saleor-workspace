@@ -103,6 +103,7 @@ services:
       - -c
       - >-
         corepack enable &&
+        node -e 'try{const fs=require("fs"),f="next.config.js";let s=fs.readFileSync(f,"utf8");if(!/NEXT_PUBLIC_IMAGE_UNOPTIMIZED/.test(s)){fs.writeFileSync(f,s.replace(/images:\s*\{/,"images: {\n\t\tunoptimized: process.env.NEXT_PUBLIC_IMAGE_UNOPTIMIZED === \"true\","));console.log("[dev] patched next.config: images.unoptimized")}}catch(e){console.log("[dev] skip next.config patch:",e.message)}' &&
         pnpm install --frozen-lockfile &&
         echo "waiting for API before codegen..." &&
         until wget -q -O /dev/null "http://host.docker.internal:${API_PORT:-8001}/graphql/"; do sleep 3; done &&
@@ -117,6 +118,9 @@ services:
       - NEXT_PUBLIC_SALEOR_API_URL=http://host.docker.internal:${API_PORT:-8001}/graphql/
       - NEXT_PUBLIC_STOREFRONT_URL=http://localhost:3000
       - NEXT_PUBLIC_DEFAULT_CHANNEL=default-channel
+      # Skip the Next image optimizer in dev (it blocks the private IP the API lives
+      # behind); the browser loads API image URLs (localhost:API_PORT) directly.
+      - NEXT_PUBLIC_IMAGE_UNOPTIMIZED=true
     ports:
       - "3000:3000"
     volumes:
