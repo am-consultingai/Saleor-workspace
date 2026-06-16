@@ -37,10 +37,11 @@ ok "git, Docker daemon, and Docker Compose ${cver} present."
 step "Selecting API host port"
 port_in_use() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null && { exec 3>&- 3<&-; return 0; } || return 1; }
 API_PORT="${API_PORT:-8001}"
+REQUESTED_PORT="$API_PORT"
 tries=0
 while port_in_use "$API_PORT"; do
-  # Skip our own already-running stack on the default port (re-run case).
-  if [ "$API_PORT" = "${API_PORT_ORIG:-8001}" ] && docker compose \
+  # Skip our own already-running stack on the requested port (re-run case).
+  if [ "$API_PORT" = "$REQUESTED_PORT" ] && docker compose \
        -f saleor-platform/docker-compose.yml -f dev/docker-compose.dev.yml ps api 2>/dev/null \
        | grep -q api; then
     ok "Port $API_PORT is our own running stack — reusing it."
@@ -71,18 +72,27 @@ step "Starting the stack (api, worker, dashboard, storefront)"
 
 # ---- 7. wait for services to answer ----------------------------------------
 step "Waiting for services to come up"
+# Probe over HTTP without assuming a specific client is installed on the host.
+http_ok() { curl -fsS -o /dev/null --max-time 3 "$1" 2>/dev/null || wget -q -O /dev/null -T 3 "$1" 2>/dev/null; }
 wait_http() { # name url max_seconds
   local name="$1" url="$2" max="$3" i=0
   while [ "$i" -lt "$max" ]; do
-    if curl -fsS -o /dev/null --max-time 3 "$url" 2>/dev/null; then ok "$name is up ($url)"; return 0; fi
+    if http_ok "$url"; then ok "$name is up ($url)"; return 0; fi
     i=$((i + 2)); sleep 2
   done
   printf '   \033[1;33m·\033[0m %s not responding yet at %s (it may still be compiling)\n' "$name" "$url"
+  return 1
 }
 # API: a GET to /graphql/ returns 200 (the playground); good readiness signal.
-wait_http "API"        "http://localhost:${API_PORT}/graphql/" 90
-wait_http "Dashboard"  "http://localhost:9000/"                120
-wait_http "Storefront" "http://localhost:3000/"                180
+wait_http "API"        "http://localhost:${API_PORT}/graphql/" 90 && API_UP=1 || API_UP=0
+wait_http "Dashboard"  "http://localhost:9000/"                120 || true
+wait_http "Storefront" "http://localhost:3000/"                180 || true
+
+# ---- 7b. pre-generate thumbnails so the first browse is fast ----------------
+if [ "${API_UP:-0}" = "1" ]; then
+  step "Warming product thumbnails (one-time, so the first page load is fast)"
+  ./dev/dev.sh warm || true
+fi
 
 # ---- 8. summary -------------------------------------------------------------
 step "Ready"

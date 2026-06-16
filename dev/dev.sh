@@ -12,6 +12,7 @@
 #   ./dev/dev.sh migrate        apply Django migrations
 #   ./dev/dev.sh seed           seed demo data + admin (skips if already seeded)
 #   ./dev/dev.sh fix-domain     point the API Site domain at the host API port
+#   ./dev/dev.sh warm           pre-generate product thumbnails (fast first browse)
 #   ./dev/dev.sh down           stop and remove containers
 #   ./dev/dev.sh logs [svc]     follow logs
 #   ./dev/dev.sh restart worker restart a service (e.g. to pick up Celery changes)
@@ -63,6 +64,31 @@ fix_domain() {
   manage shell -c "from django.contrib.sites.models import Site; Site.objects.all().update(domain='localhost:${API_PORT}')" >/dev/null
 }
 
+# Pre-generate product thumbnails by hitting the API's own thumbnail endpoint from
+# inside the RUNNING api container (Saleor generates each size/format lazily on first
+# request). Best-effort and non-fatal — uncached thumbnails just generate on demand.
+# Requires the stack to be up (uses `exec`, not a throwaway `run` container).
+warm() {
+  echo "→ Pre-generating product thumbnails so the first browse is fast (best effort)..."
+  compose exec -T api python manage.py shell <<'PY' 2>/dev/null | grep -E '^WARMED' || echo "  (warm skipped — non-fatal; thumbnails will generate on demand)"
+import base64, urllib.request
+from saleor.product.models import ProductMedia
+sizes = [(1024, "webp"), (256, "webp")]
+n = 0
+for pk in ProductMedia.objects.filter(type="IMAGE").values_list("pk", flat=True):
+    gid = base64.b64encode(("ProductMedia:%d" % pk).encode()).decode()
+    for size, fmt in sizes:
+        try:
+            urllib.request.urlopen(
+                "http://localhost:8000/thumbnail/%s/%d/%s/" % (gid, size, fmt), timeout=20
+            ).read()
+            n += 1
+        except Exception:
+            pass
+print("WARMED", n)
+PY
+}
+
 cmd="${1:-up}"
 shift || true
 
@@ -72,6 +98,7 @@ case "$cmd" in
   migrate)    manage migrate ;;
   seed)       seed_if_needed ;;
   fix-domain) fix_domain ;;
+  warm)       warm ;;
   setup)
     echo "→ Applying database migrations..."
     manage migrate
