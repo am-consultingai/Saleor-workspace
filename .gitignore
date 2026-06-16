@@ -1,0 +1,10 @@
+# Child repos: each is an autonomous git repo that pushes to its OWN origin.
+# The workspace overlay deliberately does not track their code.
+/saleor/
+/saleor-dashboard/
+/storefront/
+/saleor-platform/
+
+# Local noise
+.DS_Store
+*.log
