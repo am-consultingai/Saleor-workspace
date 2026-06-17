@@ -7,11 +7,14 @@ polyrepo, engineering the context (a `CLAUDE.md` hierarchy, a pre-computed `arch
 map, shared `.claude/` commands + agents) produces better results, fewer wrong
 turns, and less AI ping-pong than throwing the task at the bare repos.
 
-> **The task:** add a "loyalty points" feature to products — a merchandiser sets
-> points per product, and the storefront product page shows an "Earn 50 points"
-> badge. It deliberately spans all three code repos through the GraphQL contract
-> (backend schema → dashboard admin → storefront UI), so a partial answer is
-> visibly wrong. The exact wording lives in [`prompt.txt`](./prompt.txt).
+> **The task:** add a per-product "sustainability label" feature — a merchandiser
+> picks a label from a fixed set (None / Recycled / Organic / Fair Trade) and the
+> storefront product page shows a matching badge. It deliberately spans all three
+> code repos through the GraphQL contract (backend schema → dashboard admin →
+> storefront UI) as a **typed enum**, so a partial answer is visibly wrong — and
+> unlike a plain nullable scalar, an enum has no clean in-repo precedent to grep
+> onto and trips the dashboard's pinned-schema codegen. The exact wording lives
+> in [`prompt.txt`](./prompt.txt).
 
 ---
 
@@ -97,13 +100,17 @@ implementation to see it.
 
 | | WITHOUT (`no-setup`) | WITH (`main`) |
 |---|---|---|
-| **The plan** | vague or partial — often backend-only; misses the dashboard or the storefront's `.graphql` layer | names the two backend touch-points (Django model **and** GraphQL type), the dashboard form, the storefront `.graphql` document **and** the codegen step |
-| **Behavior** | re-reads / greps the repos to orient; guesses where the storefront reads products; may wander into git-ignored `saleor-platform` | consults `arch/`, goes straight to the right files; honors the "check downstream before declaring done" rule |
-| **End state** | compiles in one repo, contract broken, badge never renders → back-and-forth to patch | full round-trip; the badge renders on the product page |
+| **The plan** | vague — no clean scalar precedent to grep, so it may model the label as free text, miss that it must be a typed enum, or skip how the new enum reaches each client | models a typed enum end to end (model choices → GraphQL `Enum` → input → dashboard select → storefront label map) and names the per-client codegen step **and its schema source** |
+| **Behavior** | greps for a precedent (none clean); may hand-edit the dashboard's committed schema or regenerate against the pinned `3.23` GitHub schema; may wander into git-ignored `saleor-platform` | consults `arch/`, regenerates the dashboard client from the **live** API, honors the "check downstream before declaring done" rule |
+| **End state** | backend + storefront may compile, but the dashboard codegens against a schema without the new enum → `check-types` fails / badge never renders → back-and-forth to patch | full round-trip; the badge renders on the product page |
+
+*(Predicted divergence — AI runs are non-deterministic, so confirm against your
+first real WITHOUT take rather than assuming it.)*
 
 **Definition of done** (from the prompt): the badge actually renders on the
-storefront product page, driven by a per-product value set in the admin. A
-backend-only result is a *fail* — that asymmetry is the whole demonstration.
+storefront product page, driven by a per-product label set in the admin. A
+backend-only result, or one where the dashboard can't set the label, is a
+*fail* — that asymmetry is the whole demonstration.
 
 ---
 

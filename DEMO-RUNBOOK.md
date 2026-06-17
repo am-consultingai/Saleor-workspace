@@ -1,8 +1,8 @@
 # Demo runbook — WITH vs WITHOUT the large-codebase setup
 
-Goal: run the **same** loyalty-points prompt twice — once with the workspace
-context artifacts, once without — and show that the setup produces a clean
-cross-repo result while the bare repo ping-pongs.
+Goal: run the **same** sustainability-label prompt twice — once with the
+workspace context artifacts, once without — and show that the setup produces a
+clean cross-repo result while the bare repo ping-pongs.
 
 The only variable between the two runs is the **overlay git branch**:
 
@@ -50,8 +50,12 @@ pre-baked session and narrate it. Make the first line of the prompt identifiable
 so the two are easy to tell apart in the resume list.
 
 ## What "different results" looks like
-- **WITHOUT:** vague/backend-only plan; re-greps to orient; may miss the
-  dashboard or the storefront `.graphql` layer; may wander into git-ignored
-  `saleor-platform`; declares done at the backend.
-- **WITH:** consults `arch/`; names the two backend files (model + GraphQL type),
-  the dashboard form, the storefront `.graphql` doc + codegen; finishes clean.
+- **WITHOUT:** vague plan with no clean precedent to grep; may model the label as
+  free text instead of a typed enum; regenerates the dashboard client against the
+  pinned `3.23` GitHub schema (which lacks the new enum) → `check-types` fails;
+  may wander into git-ignored `saleor-platform`.
+- **WITH:** consults `arch/`; models a typed enum across model → GraphQL type →
+  input → dashboard select → storefront badge; regenerates each client from the
+  live API; finishes clean.
+
+*(AI runs vary — confirm this against your first real WITHOUT take.)*
