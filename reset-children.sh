@@ -8,12 +8,12 @@
 # What it does, per child repo:
 #   1. checkout the recorded branch (force, discarding any AI-created branch state)
 #   2. reset --hard to the pinned commit  (throws away the AI's edits + commits)
-#   3. clean -fd                          (deletes NEW files the AI created:
-#                                          migrations, components, .graphql docs)
+#   3. clean -fd                          (deletes any NEW untracked files the
+#                                          run created)
 #
 # What it deliberately does NOT do:
 #   - It does NOT pass `git clean -x`, so gitignored files (node_modules, build
-#     caches, generated codegen output) are PRESERVED. You don't have to reinstall
+#     caches, generated output) are PRESERVED. You don't have to reinstall
 #     deps between takes. Pass --deep if you want a scorched-earth clean (slow:
 #     you'll need to reinstall node_modules afterwards).
 #
