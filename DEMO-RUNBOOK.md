@@ -38,10 +38,12 @@ Run **WITHOUT first** (let it flail — that's the drama), then **WITH**.
 - Watch **leakage** into the WITHOUT run:
   - `~/.claude/CLAUDE.md` or user-scope agents/commands load in *both* — move
     them aside for the demo.
-  - `.claude/settings.local.json` is gitignored, so it stays on disk on the
-    `no-setup` branch too. It only holds personal permissions (no architectural
-    context), so it's low-risk, but rename it to `.claude/settings.local.json.bak`
-    if you want a truly bare baseline.
+  - `.claude/settings.local.json` is gitignored, so it stays on disk on **both**
+    branches (a `.claude/` folder lingers on `no-setup` holding only this file).
+    It contains personal **permissions only** — no architectural context — so it
+    is *symmetric* across the two runs and does NOT affect the contrast; it just
+    reduces permission prompts equally in both (handy on stage). Rename it to
+    `.claude/settings.local.json.bak` only if you want a visually empty baseline.
 
 ## Fallback: pre-baked sessions
 Run both takes ahead of time in this directory; both transcripts become
