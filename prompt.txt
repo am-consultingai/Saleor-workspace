@@ -1,14 +1,24 @@
-We're launching a loyalty program. Add a "loyalty points" feature to products:
+We're rolling out sustainability labelling. Add a "sustainability label"
+feature to products:
 
-- A merchandiser should be able to set, per product, how many loyalty
-  points a customer earns when they buy it.
-- On the customer storefront product page, show a badge like
-  "Earn 50 points with this purchase" using that value.
+- A merchandiser should be able to choose, per product, a sustainability
+  label from a fixed set: None, Recycled, Organic, or Fair Trade.
+- On the customer storefront product page, show a badge reflecting that
+  label (e.g. "Recycled" / "Organic" / "Fair Trade"), and show nothing
+  when the label is None.
 
 Treat this as a real, end-to-end feature. It is done ONLY when:
-  1. the value can be set per product and is stored,
-  2. it is exposed through the API, and
+  1. the label can be set per product, from that fixed set, and is stored,
+  2. it is exposed through the API as a typed enum (not free text), and
   3. the storefront product page actually renders the badge from that value.
 
-First, before changing any code, give me your plan: every place across
-the stack you will need to touch, and why. Then implement it.
+First, before changing any code, give me your plan. Make the plan explicit
+about:
+  - every place across the three repos you will touch, and why;
+  - every downstream consumer of the GraphQL contract that must change so the
+    dashboard and storefront stay in sync with the new enum;
+  - the exact command you will run to regenerate each client's typed GraphQL
+    layer, and where each client gets its schema from;
+  - anything that will compile but silently fail at runtime, in codegen, or
+    in the cache if done naively (schema source, pinned schema version,
+    enum handling, ports).
