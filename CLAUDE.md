@@ -22,6 +22,10 @@ a change to the schema in `saleor` may require matching changes in the dashboard
 and/or storefront. Treat cross-repo coordination through the schema as the main
 risk surface.
 
+**Before any cross-repo change, read the architecture maps in `arch/`** — they are
+the pre-computed cross-repo contract (one `arch/<repo>.md` per repo). Query them
+instead of re-reading the repos. Run `/investigate` to (re)generate them.
+
 ## Running the stack
 
 **One command from a fresh clone:** `./bootstrap.sh` — clones the child repos,

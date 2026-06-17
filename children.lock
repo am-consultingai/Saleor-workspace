@@ -1,0 +1,7 @@
+# Pinned baseline commits for the child repos.
+# reset-children.sh restores each repo to exactly these commits between demo takes.
+# Format:  <folder> <commit-sha> <branch>
+saleor            e9a2e5fc69718f8f6b3e2039cfa8a87e8158ec37 main
+saleor-dashboard  dfe0c762b2faf1fbb78f032f1bc00088cbc160fd main
+storefront        655b302efdc3cd0081ca73d5d2fac89b9cf46342 main
+saleor-platform   ab6315bd59c58b4815175df4c679107ff9695be4 main

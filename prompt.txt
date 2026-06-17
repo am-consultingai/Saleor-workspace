@@ -1,0 +1,14 @@
+We're launching a loyalty program. Add a "loyalty points" feature to products:
+
+- A merchandiser should be able to set, per product, how many loyalty
+  points a customer earns when they buy it.
+- On the customer storefront product page, show a badge like
+  "Earn 50 points with this purchase" using that value.
+
+Treat this as a real, end-to-end feature. It is done ONLY when:
+  1. the value can be set per product and is stored,
+  2. it is exposed through the API, and
+  3. the storefront product page actually renders the badge from that value.
+
+First, before changing any code, give me your plan: every place across
+the stack you will need to touch, and why. Then implement it.
