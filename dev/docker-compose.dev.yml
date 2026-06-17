@@ -53,9 +53,13 @@ services:
       - saleor-media:/app/media
 
   worker:
+    # Reuses the image built by `api` rather than declaring its own `build:`.
+    # Both used to build the identical saleor-local:dev tag concurrently, which
+    # races on the containerd image store ("image ... already exists" on export).
+    # depends_on makes api build + start first, so the tag exists before worker starts.
     image: saleor-local:dev
-    build:
-      context: ../saleor
+    depends_on:
+      - api
     # Celery has no built-in autoreload; the source is mounted so edits are picked
     # up on `./dev/dev.sh restart worker` (or a full `up`).
     volumes:
