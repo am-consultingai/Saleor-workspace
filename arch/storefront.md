@@ -1,45 +1,49 @@
 # storefront — architecture map
 
-Saleor customer-facing shop. Next.js 16 (App Router, React 19, TypeScript, `type: module`), pnpm 10, Node 24. GraphQL **client** of the `saleor` backend.
+Saleor customer-facing shop. Next.js 16 (App Router, React 19, TypeScript, `type: module`), pnpm 10, Node 24. **Server-first:** all Saleor traffic goes through server-side `fetch` (no client GraphQL client except inside the checkout island). Pure **GraphQL client** of the `saleor` backend.
 
 ## Structure
 
-- `src/app/` — App Router routes (RSC by default; SSR/streaming, Partial Prerendering via `cacheComponents`).
-  - `src/app/(storefront)/[channel]/(main)/` — the shop, scoped by **channel slug** segment: `page.tsx` (home), `products/`, `products/[slug]/` (PDP), `categories/[slug]/`, `collections/[slug]/`, `search/`, `cart/`, `pages/[slug]/` (CMS), `account/` (+ `orders/`, `addresses/`, `settings/`), `login/`, `signup/`, `orders/`. Each leaf has `page.tsx` (+ `loading.tsx`, optional `client.tsx`/`not-found.tsx`).
-  - `src/app/(checkout)/checkout/` — separate route group for the checkout SPA host (`page.tsx`, `complete/page.tsx`, `checkout-session-loader.tsx`). Mountable standalone via `NEXT_PUBLIC_CHECKOUT_URL`.
-  - `src/app/api/` — Route Handlers (BFF): `auth/{login,register,confirm-account,set-password,reset-password}`, `revalidate` (webhook/cache), `cache-info`, `og`, `og/route.tsx`.
-  - `src/app/config.ts` — `ProductsPerPage=12`, `DefaultChannelSlug`.
-- `src/checkout/` — self-contained checkout module: a **urql**-based React SPA (`checkout-app.tsx`, `views/`, `components/payment/stripe/...`, `lib/payment/...`) with its **own** GraphQL setup and codegen.
-- `src/lib/` — server utilities: `graphql.ts` (the API client core), `auth/` (Saleor auth SDK + cookie token storage + BFF), `cache-manifest.ts` / `revalidate-tags.ts` / `cache-life-profiles*`, `catalog/`, `channels/`, `menus/`, `search/`, `images.ts`, `seo/`, `pricing.ts`, `api-auth.ts`.
-- `src/gql/` — **auto-generated** storefront types (do not edit). `src/checkout/graphql/generated/` — auto-generated checkout types.
-- `src/graphql/*.graphql` — storefront query/mutation/fragment source files.
-- `src/session-bridge/` — shares checkout-session/cart state (cookies, URL params) between storefront and checkout deployments.
-- `src/ui/`, `src/config/` — components and channel config. Tests are colocated `*.test.ts(x)` run by Vitest.
-- Root: `next.config.js`, `.graphqlrc.ts`, `tsconfig.json`, `vitest.config.ts`, `eslint.config.mjs`, `knip.config.ts`, `Dockerfile`, `docker-compose.yml`.
+Root config: `package.json`, `.graphqlrc.ts` (codegen), `.env.example`, `Dockerfile` (standalone Next output), `next`/`tailwind`/`postcss` configs, `skills/` (Paper storefront migration playbooks — docs only).
+
+Code lives in `src/`:
+- **`src/app/`** — App Router. Two route groups:
+  - `(storefront)/[channel]/(main)/` — the shop, channel-scoped by URL segment: `page.tsx` (home), `products/[slug]/` (PDP), `categories/[slug]/`, `collections/[slug]/`, `search/`, `cart/`, `pages/[slug]/` (CMS), `account/` (+ `orders/`, `addresses/`, `settings/`), `login/`, `signup/`, `orders/`. Each leaf has `page.tsx` (+ `loading.tsx`, optional `client.tsx`/`not-found.tsx`). `src/app/page.tsx` redirects `/` to `NEXT_PUBLIC_DEFAULT_CHANNEL`.
+  - `(checkout)/checkout/` — separate checkout shell (`page.tsx`, `complete/page.tsx`, `checkout-session-loader.tsx`). Mountable standalone via `NEXT_PUBLIC_CHECKOUT_URL`.
+  - `src/app/api/` — Route Handlers (BFF): `auth/{login,register,confirm-account,set-password,reset-password}`, `revalidate` (Saleor webhook + manual cache purge), `cache-info`, `og`.
+- **`src/checkout/`** — self-contained checkout module: own `graphql/` + own codegen → `graphql/generated/`, `components/` (incl. `payment/stripe/`), `hooks/`, `providers/`, `views/`. Uses **urql** client-side. Context providers: `CheckoutSession`, `CheckoutUser`, `CheckoutData`, `PaymentReturnError`.
+- **`src/lib/`** — server logic: `graphql.ts` (the API client core), `auth/` (BFF + cookie sessions), `cache-manifest.ts` + `cache-life-profiles.ts` (caching/revalidation rules), `catalog/`, `menus/`, `channels/`, `search/`, `seo/`, `images.ts`, `pricing.ts`, `api-auth.ts`.
+- **`src/gql/`** — auto-generated storefront types (do not edit). `src/checkout/graphql/generated/` — auto-generated checkout types.
+- **`src/graphql/*.graphql`** — storefront query/mutation/fragment source files.
+- **`src/session-bridge/`** — shares checkout-session/cart state (cookies, URL params) between storefront and checkout deployments.
+- **`src/ui/`** — presentational components grouped by surface: `plp/`, `pdp/`, `cart/`, `nav/`, `account/`, `auth/`, Radix-based primitives.
+- Tests are colocated `*.test.ts(x)` run by Vitest. Root: `next.config.js`, `.graphqlrc.ts`, `tsconfig.json`, `vitest.config.ts`, `eslint.config.mjs`, `knip.config.ts`, `Dockerfile`, `docker-compose.yml`.
 
 ## GraphQL surface
 
-This repo **consumes** Saleor's schema (it is a client). Two independent codegen pipelines, both pointed at the live schema via `NEXT_PUBLIC_SALEOR_API_URL`:
+This repo **consumes** Saleor's schema (it is a client). Two independent codegen pipelines, both pointed at `NEXT_PUBLIC_SALEOR_API_URL`:
 
-1. **Storefront** (`.graphqlrc.ts`): `@graphql-codegen` `client` preset, `documentMode: "string"` (`TypedDocumentString`), `strictScalars`, `fragmentMasking: false`. Sources `src/graphql/**/*.graphql` → `src/gql/`. Executed by hand-rolled fetch client in `src/lib/graphql.ts` (no Apollo/urql on the storefront side).
+1. **Storefront** (`.graphqlrc.ts`): `@graphql-codegen` `client` preset, `documentMode: "string"` (`TypedDocumentString`), `strictScalars`, `fragmentMasking: false`. Sources `src/graphql/**/*.graphql` → `src/gql/`. Executed by the bespoke `fetch` client in `src/lib/graphql.ts` (no Apollo/urql on the storefront side).
 2. **Checkout** (`src/checkout/graphql/codegen.ts`): `typescript` + `typescript-operations` + `typescript-urql`, `documentMode: "graphQLTag"`. Sources `src/checkout/graphql/**/*.graphql` → `src/checkout/graphql/generated/`. Runs in-browser via **urql**.
 
-Concrete operations defined (the cross-repo contract):
-- Catalog/content (storefront): `ProductDetails`, `ProductList`, `ProductListPaginated`, `ProductListByCategory`, `ProductListByCollection`, `SearchProducts`, `CategoriesBySlug`, `PageGetBySlug`, `MenuGetBySlug`, `ChannelsList`; fragments `ProductListItem`, `VariantDetails`, `OrderDetails`, `AddressDetails`, `UserDetails`.
-- Account/auth (storefront): `CurrentUser`, `CurrentUserProfile`, `CurrentUserOrderList`, `CurrentUserOrdersPaginated`, `OrderByNumber`, `AccountUpdate`, `AccountAddressCreate/Update/Delete`, `AccountSetDefaultAddress`, `AccountRequestDeletion`, `PasswordChange`. Raw (untyped) mutations in `api/auth/*` route handlers (e.g. `AccountRegister`).
-- Cart (storefront): `CheckoutCreate`, `CheckoutFind`, `CheckoutAddLine`, `CheckoutLinesUpdate`, `CheckoutDeleteLines`, `CheckoutCustomerDetach`.
-- Checkout module (`src/checkout/graphql/*.graphql`): full flow — `checkout`/`channel`/`order`/`addressValidationRules` queries; mutations `checkoutCreate`, `checkoutLinesAdd/Update`, `checkoutLineDelete`, `checkoutEmailUpdate`, `checkoutMetadataUpdate`, `checkoutCustomerAttach/Detach`, `checkoutShipping/BillingAddressUpdate`, `checkoutDeliveryMethodUpdate`, `deliveryOptionsCalculate`, `checkoutAddPromoCode`/`checkoutRemovePromoCode`, `checkoutComplete`, `paymentGatewaysInitialize`, `transactionInitialize`, `transactionProcess`; user mutations `userRegister`, `requestPasswordReset`, `userAddress*`. Key types: `Product`/`ProductVariant`, `Checkout`/`CheckoutLine`, `Order`/`OrderLine`, `Address`, `User`, `Channel`, `Menu`, `Page`, `Money`, `PaymentGateway`.
+Concrete operations / contract types:
+- **Catalog/content:** `ProductDetails`, `ProductList(ByCategory|ByCollection|Paginated|Item)`, `SearchProducts`, `CategoriesBySlug`, `PageGetBySlug`, `MenuGetBySlug`, `ChannelsList`.
+- **Account/auth:** `CurrentUser`, `CurrentUserProfile`, `CurrentUserOrderList`, `CurrentUserOrdersPaginated`, `OrderByNumber`, `AccountUpdate`, `AccountAddress*`, `AccountSetDefaultAddress`, `AccountRequestDeletion`, `PasswordChange`.
+- **Cart:** `CheckoutCreate`, `CheckoutFind`, `CheckoutAddLine`, `CheckoutLinesUpdate`, `CheckoutDeleteLines`, `CheckoutCustomerDetach`.
+- **Checkout module (`src/checkout/graphql/*.graphql`):** full flow — `checkout`/`channel`/`order`/`addressValidationRules` queries; mutations `checkoutCreate`, `checkoutLinesAdd/Update`, `checkoutLineDelete`, `checkoutEmailUpdate`, `checkoutMetadataUpdate`, `checkoutCustomerAttach/Detach`, `checkoutShipping/BillingAddressUpdate`, `checkoutDeliveryMethodUpdate`, `deliveryOptionsCalculate`, `checkoutAdd/RemovePromoCode`, `checkoutComplete`, `paymentGatewaysInitialize`, `transactionInitialize`, `transactionProcess`, user address mutations.
+- **Key types in contract:** `Product`/`ProductVariant`/`Attribute`/`Category`/`Collection`, `Checkout`/`CheckoutLine`/`PaymentGateway`/`Money`, `Order`/`OrderLine`, `User`/`Address`/`AddressValidationData`, `Channel`, `Menu`, `Page`, `GiftCard`.
+- **Webhook payloads consumed** (cache invalidation): `PRODUCT_UPDATED`, `PRODUCT_VARIANT_UPDATED`, `CATEGORY_UPDATED`, `COLLECTION_UPDATED`, `PAGE_UPDATED`, `MENU_ITEM_UPDATED`.
 
-**Ripple risk:** any backend schema change to these types/fields (rename, nullability, removal, scalar change) breaks `pnpm generate` or typecheck here. Codegen and the `update_types.yml` workflow are the canaries — see CI below.
+Schema changes in `saleor` break `pnpm generate` or typecheck here. `update_types.yml` is the canary.
 
 ## External dependencies & services
 
-- **Backend:** the `saleor` GraphQL API (only external service it talks to). Custom scalar map in both codegen configs (`Decimal`→number, `DateTime`→string, `Metadata`→`Record<string,string>`, etc.).
-- **Auth:** `@saleor/auth-sdk` (JWT, cookie-backed token storage) — `src/lib/auth/server.ts`, `cookie-token-storage.ts`.
-- **Payments:** Stripe (`@stripe/stripe-js`, `@stripe/react-stripe-js`) wired through Saleor's transaction/payment-gateway API; plus a dev-only "dummy payment". Publishable keys come from Saleor `paymentGatewayInitialize`, not env.
-- **GraphQL clients:** `urql` (checkout SPA only), `graphql`/`graphql-tag`, `@graphql-typed-document-node/core`. Storefront pages use a bespoke `fetch` client.
+- **Backend:** `saleor` GraphQL API only. Custom scalar map: `Decimal`→number, `DateTime`→string, `Metadata`→`Record<string,string>`, etc.
+- **Auth:** `@saleor/auth-sdk` (JWT, cookie-backed token storage) via `src/lib/auth/server.ts`, `cookie-token-storage.ts`.
+- **Payments:** Stripe (`@stripe/stripe-js`, `@stripe/react-stripe-js`) wired through Saleor's transaction/payment-gateway API; dev-only dummy payment. Publishable keys come from Saleor `paymentGatewaysInitialize`, not env.
+- **GraphQL clients:** `urql` (checkout SPA only), `graphql`/`graphql-tag`, `@graphql-typed-document-node/core`. Storefront pages use a bespoke `fetch` client with no heavy client library.
 - **UI/infra:** React 19, Tailwind 3 (+ forms/typography/container-queries), Radix UI, `embla-carousel`, `lucide-react`, `editorjs-html` + `xss` (CMS rich text), `sharp` (image), `@vercel/speed-insights`, `schema-dts` (JSON-LD SEO).
-- **Depended on by:** none (leaf client). It is one of the two consumers of the shared schema alongside `saleor-dashboard`.
+- **Depended on by:** none (leaf client) alongside `saleor-dashboard`.
 
 ## Env & configuration
 
@@ -47,31 +51,39 @@ Defined in `.env.example`; dev values in `.env.local` (points at dockerized API 
 - `NEXT_PUBLIC_SALEOR_API_URL` (required, trailing slash) — the API endpoint; doubles as the codegen schema source. Dev: `http://localhost:8001/graphql/`.
 - `NEXT_PUBLIC_DEFAULT_CHANNEL` (required) — fallback channel; `/` redirects here.
 - `NEXT_PUBLIC_STOREFRONT_URL` — canonical/OG URLs.
-- `STOREFRONT_CHANNELS` (allowlist, comma-separated) / `STOREFRONT_DISCOVER_CHANNELS` + `SALEOR_APP_TOKEN` (opt-in API discovery; app token also used for `channels` query via `executeAppGraphQL`).
+- `STOREFRONT_CHANNELS` (allowlist) / `STOREFRONT_DISCOVER_CHANNELS` + `SALEOR_APP_TOKEN` (opt-in API discovery; app token also used for `channels` query via `executeAppGraphQL`).
 - `NEXT_PUBLIC_CHECKOUT_URL` — split checkout deploy + redirect allowlist.
 - `REVALIDATE_SECRET` (≥32 chars in prod) + `SALEOR_WEBHOOK_SECRET` (HMAC) — cache invalidation auth.
-- Stripe/dummy toggles: `(NEXT_PUBLIC_)ENABLE_STRIPE_PAYMENTS`, `..._EXPRESS_CHECKOUT`, `(NEXT_PUBLIC_)ALLOW_DUMMY_PAYMENT`, `NEXT_PUBLIC_ENABLE_CHECKOUT_MARKETING_OPT_IN`.
+- Stripe/dummy toggles: `(NEXT_PUBLIC_)ENABLE_STRIPE_PAYMENTS`, `(NEXT_PUBLIC_)ALLOW_DUMMY_PAYMENT`, `NEXT_PUBLIC_ENABLE_CHECKOUT_MARKETING_OPT_IN`.
 - Tuning (read in `src/lib/graphql.ts`): `SALEOR_MAX_CONCURRENT_REQUESTS` (3), `SALEOR_MIN_REQUEST_DELAY_MS` (200), `SALEOR_REQUEST_TIMEOUT_MS` (15000), `NEXT_BUILD_RETRIES`.
-- `NEXT_OUTPUT` (`standalone`|`export`) controls Next build mode for Docker; `NEXT_PUBLIC_IMAGE_UNOPTIMIZED` controls image optimization (see gotcha).
+- `NEXT_OUTPUT` (`standalone`|`export`) controls Next build mode; `NEXT_PUBLIC_IMAGE_UNOPTIMIZED` controls image optimization (see gotcha below).
+
+## Rendering patterns & state
+
+- **RSC-first:** pages are async Server Components fetching via `executePublicGraphQL`. Data fetchers use the Next `"use cache"` directive + `applyCacheProfile(...)` from `src/lib/cache-manifest.ts` (per-type cache-life profiles + tag/path scheme). On-demand ISR — no `generateStaticParams` for products.
+- **Cache invalidation** via `/api/revalidate` POST (Saleor webhook, HMAC-verified) and GET (manual, bearer-token), translating payloads to `revalidatePath`/`revalidateTag` per channel.
+- **`Suspense` islands:** PDP splits static shell from dynamic gallery/variant sections that read `searchParams`.
+- **`src/lib/graphql.ts` `executeGraphQL`** has three auth modes (`none`/`session`/`app`), a request queue (concurrency + min-delay throttle), retry-with-backoff on 429/5xx, timeout, and a `GraphQLResult<T>` ok/error union (does not throw).
+- **State management:** no Redux/Zustand. Server state via RSC + server actions (`actions.ts` files). Client state via React Context — cart (`src/ui/components/cart/cart-context.tsx`), account. Cart/checkout identity flows through Saleor `Checkout` IDs (the ID is the credential for public reads).
 
 ## CI/CD & tests
 
-- **Tests:** Vitest (`pnpm test` / `test:run`); many colocated unit tests under `src/checkout/lib`, `src/lib/auth`, etc. No e2e framework found.
-- **Quality gates:** ESLint 9 (`eslint-config-next`), `tsc --noEmit` (`typecheck`), `knip` (dead-code), Prettier + Tailwind plugin; Husky + lint-staged pre-commit.
-- **Codegen is a build step:** `predev`/`prebuild` run `generate:all` (storefront + checkout) — a build requires a reachable schema (live URL, or `schema.graphql` file when `GITHUB_ACTION=generate-schema-from-file`).
-- **Workflows** (`.github/workflows/`): `lint.yml` (runs on Vercel `deployment_status` success), `check-licenses.yaml`, and `update_types.yml` — **scheduled (workdays 18:00)**: fetches the latest `saleor/saleor` release's `schema.graphql`, runs `pnpm generate`, and opens a PR titled "Update schema to Saleor <tag>". This is the automated mechanism for absorbing backend schema changes.
-- **Deploy:** Vercel (inferred from speed-insights, deployment-status trigger) and/or Docker (`Dockerfile`, `output: standalone`). No explicit deploy pipeline file in-repo.
+- **Build:** `next build` (`prebuild` runs `generate:all`); Docker multi-stage → Next standalone, runs as non-root `nextjs` user.
+- **Tests:** Vitest (`pnpm test` / `test:run`), colocated `*.test.ts(x)` (auth, cache-manifest, plp filters). `typecheck` = `tsc --noEmit`; lint = ESLint 9 (`eslint-config-next`); `knip` for dead-code; Husky + lint-staged pre-commit.
+- **Workflows:** `lint.yml` (runs on Vercel `deployment_status` success), `check-licenses.yaml`, `update_types.yml` (scheduled, workdays 18:00 — fetches latest `saleor/saleor` release `schema.graphql`, regenerates types, opens PR "Update schema to Saleor <tag>").
+- **Deploy:** Vercel (inferred from `@vercel/speed-insights` and `deployment_status` trigger) and/or Docker standalone.
 
 ## Security & compliance notes
 
-- **Auth = Saleor JWT in cookies.** `src/lib/auth/server.ts` uses `@saleor/auth-sdk` with cookie token storage; `secure` only in production. Auth flows proxied through `src/app/api/auth/*` BFF route handlers (login/register/confirm/reset). `src/lib/graphql.ts` separates three auth modes: `executePublicGraphQL` (no header — catalog/menus/checkout-by-id, where the ID is the credential), `executeAuthenticatedGraphQL` (session JWT via `fetchWithAuth`), `executeAppGraphQL` (server-only `SALEOR_APP_TOKEN`). The app token must never reach the client.
-- **Cache-invalidation endpoint** (`POST /api/revalidate`): verifies Saleor HMAC (`SALEOR_WEBHOOK_SECRET`) and/or `REVALIDATE_SECRET` via timing-safe compare (`src/lib/api-auth.ts`). Query-string `?secret=` is supported but deprecated/insecure. Warns if `REVALIDATE_SECRET` < 32 chars in prod.
-- **Rich-text rendering** uses `xss` to sanitize EditorJS HTML from CMS pages — XSS surface if bypassed.
-- **Rate limiting / resilience:** client-side `RequestQueue` (max 3 concurrent, 200ms spacing) + retry/backoff on 429/5xx in `src/lib/graphql.ts` to avoid hammering the API.
+- **Auth = BFF pattern.** `src/lib/auth/` signs in against Saleor via `@saleor/auth-sdk`; JWT tokens persist in **server-side cookies**, never exposed to client JS. Rate-limited (`auth-rate-limit.ts`); redirect URLs validated (`validate-redirect-url.ts`).
+- **Three credential planes in `graphql.ts`:** anonymous public reads; customer session (cookie JWT via `fetchWithAuth`); `SALEOR_APP_TOKEN` (server-only env, never reaches client).
+- **`/api/revalidate`** verifies Saleor HMAC (`saleor-signature`, timing-safe) or `REVALIDATE_SECRET` bearer token; warns if secret < 32 chars. CR/LF log-injection guard on webhook payloads.
+- **Rich-text:** `xss()` sanitizes EditorJS HTML before `dangerouslySetInnerHTML` — XSS surface if bypassed.
+- **Resilience:** `RequestQueue` (max 3 concurrent, 200ms spacing) + retry/backoff on 429/5xx.
 - **SSR / image-URL gotchas (highest-risk for changes):**
-  - `next.config.js` `images.unoptimized` is gated on `NEXT_PUBLIC_IMAGE_UNOPTIMIZED`. In dockerized dev the Next image optimizer fetches sources server-side but **blocks private/loopback IPs**, while the only container-reachable route to the API is a private IP — so dev must skip optimization and let the browser load `localhost:<API_PORT>` image URLs directly. Image URLs derive from the API host/port (default **8001**, not 8000).
-  - `images.remotePatterns` currently allows `hostname: "*"` (must be restricted in production).
-  - Only WebP is enabled (AVIF disabled for LCP/cold-start reasons).
-- **Channel routing:** `[channel]` segment is validated against an allowlist (`isAllowedStorefrontChannel`) in `src/app/(storefront)/[channel]/layout.tsx`; unknown channels 404. Enabling `STOREFRONT_DISCOVER_CHANNELS` exposes all active backend channels and requires `SALEOR_APP_TOKEN` — broadens the public surface (inferred).
+  - In dockerized dev the Next image optimizer blocks private/loopback IPs, so `NEXT_PUBLIC_IMAGE_UNOPTIMIZED=true` is needed; browser loads image URLs directly from `localhost:8001`.
+  - `images.remotePatterns` currently allows `hostname: "*"` — **must be restricted in production**.
+  - AVIF disabled (WebP only) for LCP/cold-start reasons.
+- **Channel routing:** `[channel]` segment is validated against an allowlist (`isAllowedStorefrontChannel`) in the layout — unknown channels 404. `STOREFRONT_DISCOVER_CHANNELS` requires `SALEOR_APP_TOKEN` and broadens the public surface.
 
-Key files: `src/lib/graphql.ts`, `.graphqlrc.ts`, `src/checkout/graphql/codegen.ts`, `next.config.js`, `src/lib/api-auth.ts`, `src/app/api/revalidate/route.ts`, `src/lib/auth/server.ts`, `.github/workflows/update_types.yml`, `.env.example`.
+Key files: `src/lib/graphql.ts`, `.graphqlrc.ts`, `src/checkout/graphql/codegen.ts`, `next.config.js`, `src/lib/api-auth.ts`, `src/app/api/revalidate/route.ts`, `src/lib/auth/server.ts`, `src/lib/cache-manifest.ts`, `src/checkout/checkout-app.tsx`, `.github/workflows/update_types.yml`, `.env.example`.
