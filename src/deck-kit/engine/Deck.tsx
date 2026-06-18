@@ -42,7 +42,20 @@ export function Deck({ slides }: { slides: Slide[] }) {
   }, []);
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-canvas-deep">
+    <div
+      className="fixed inset-0 overflow-hidden bg-canvas-deep"
+      onClick={(e) => {
+        // Bare clicks on the slide advance/retreat — but let real interactive
+        // elements (links, the help button) work, and let users select/copy
+        // text. (Previously a full-screen button overlay swallowed both.)
+        if (showHelp) return;
+        const el = e.target as HTMLElement;
+        if (el.closest("a, button, [data-no-nav]")) return;
+        if (window.getSelection()?.toString()) return;
+        if (e.clientX < window.innerWidth * 0.25) nav.prev();
+        else nav.next();
+      }}
+    >
       {/* Scaled, centered 16:9 stage */}
       <div className="absolute inset-0 grid place-items-center">
         <div
@@ -67,26 +80,6 @@ export function Deck({ slides }: { slides: Slide[] }) {
           <Chrome index={nav.index} total={nav.total} />
         </div>
       </div>
-
-      {/* Click zones: left third = back, right two-thirds = forward */}
-      <button
-        aria-label="Previous slide"
-        tabIndex={-1}
-        onClick={(e) => {
-          e.currentTarget.blur();
-          nav.prev();
-        }}
-        className="absolute inset-y-0 left-0 w-1/4 cursor-w-resize bg-transparent outline-none focus:outline-none focus-visible:outline-none"
-      />
-      <button
-        aria-label="Next slide"
-        tabIndex={-1}
-        onClick={(e) => {
-          e.currentTarget.blur();
-          nav.next();
-        }}
-        className="absolute inset-y-0 right-0 w-3/4 cursor-e-resize bg-transparent outline-none focus:outline-none focus-visible:outline-none"
-      />
 
       <HelpHint onClick={() => setShowHelp((s) => !s)} />
       <AnimatePresence>{showHelp && <HelpOverlay onClose={() => setShowHelp(false)} />}</AnimatePresence>

@@ -8,7 +8,7 @@
  * Compose branded layouts from "../deck-kit/slides". Each array entry is one
  * slide. Run `npm run dev` and use → / click to advance.
  */
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import type { Slide } from "../deck-kit/engine/types";
 import {
@@ -273,6 +273,273 @@ function PromptingExpertSlide() {
   );
 }
 
+/**
+ * Experiment slide 1 — the A/B setup, told as a fork. One task node splits into
+ * two branches: `main` (WITH) fills with summary-artifact chips that spring in;
+ * `no-setup` (WITHOUT) stays bare. The single variable, shown not listed.
+ */
+const ARTIFACTS = ["CLAUDE.md", "arch/ maps", ".claude/"];
+
+function ExperimentSlide() {
+  return (
+    <SlideShell bg="grid">
+      <Stagger className="flex h-full flex-col">
+        <Item className="mb-2">
+          <Eyebrow>Does the setup actually help?</Eyebrow>
+        </Item>
+        <Item>
+          <h2 className="font-display text-6xl font-bold tracking-tight text-ink">
+            Same task. <GradientText>Two contexts.</GradientText>
+          </h2>
+        </Item>
+        <Item>
+          <p className="mt-3 max-w-3xl text-xl font-light text-muted">
+            An A/B test: same task, same model, run twice — the only variable is the context the agent gets.
+          </p>
+        </Item>
+
+        <Item className="mt-7 flex flex-1 items-center gap-6">
+          {/* Task node */}
+          <div className="shrink-0 rounded-2xl border border-white/15 bg-panel px-7 py-6 text-center">
+            <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-subtle">the task</div>
+            <div className="mt-2 font-display text-2xl font-semibold leading-tight text-ink">
+              Sustainability
+              <br />
+              label
+            </div>
+            <div className="mt-3 font-mono text-[11px] leading-relaxed text-subtle">
+              1 feature · 3 repos
+              <br />
+              same model
+            </div>
+          </div>
+
+          {/* Fork connectors (draw in) */}
+          <svg viewBox="0 0 80 240" className="h-60 w-20 shrink-0 overflow-visible">
+            <motion.path
+              d="M0 120 C 40 120, 40 52, 80 52"
+              stroke="#10b981"
+              strokeWidth="2.5"
+              fill="none"
+              initial={{ pathLength: 0, opacity: 0 }}
+              animate={{ pathLength: 1, opacity: 1 }}
+              transition={{ duration: 0.7, delay: 0.4 }}
+            />
+            <motion.path
+              d="M0 120 C 40 120, 40 188, 80 188"
+              stroke="#64748b"
+              strokeWidth="2.5"
+              strokeDasharray="5 6"
+              fill="none"
+              initial={{ pathLength: 0, opacity: 0 }}
+              animate={{ pathLength: 1, opacity: 1 }}
+              transition={{ duration: 0.7, delay: 0.4 }}
+            />
+          </svg>
+
+          {/* Two branches */}
+          <div className="flex flex-1 flex-col justify-center gap-5">
+            {/* WITH */}
+            <motion.div
+              className="rounded-2xl border border-good/40 bg-tile p-5"
+              animate={{
+                boxShadow: [
+                  "0 0 0 rgba(16,185,129,0)",
+                  "0 0 26px rgba(16,185,129,0.22)",
+                  "0 0 0 rgba(16,185,129,0)",
+                ],
+              }}
+              transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
+            >
+              <div className="flex items-baseline justify-between">
+                <span className="font-mono text-xs uppercase tracking-[0.2em] text-good">main · with</span>
+                <span className="font-mono text-[11px] text-good/70">+ summary artifacts</span>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {ARTIFACTS.map((a, i) => (
+                  <motion.span
+                    key={a}
+                    initial={{ opacity: 0, y: 10, scale: 0.85 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ delay: 0.9 + i * 0.22, type: "spring", stiffness: 420, damping: 22 }}
+                    className="rounded-md border border-good/30 bg-good/10 px-3 py-1.5 font-mono text-sm text-ink"
+                  >
+                    {a}
+                  </motion.span>
+                ))}
+              </div>
+            </motion.div>
+
+            {/* WITHOUT */}
+            <div className="rounded-2xl border border-dashed border-white/15 bg-panel/30 p-5">
+              <span className="font-mono text-xs uppercase tracking-[0.2em] text-subtle">
+                no-setup · without
+              </span>
+              <div className="mt-3 font-mono text-sm text-muted">bare repos — nothing else</div>
+            </div>
+          </div>
+        </Item>
+
+        {/* Repo link */}
+        <Item className="mt-6">
+          <a
+            href="https://github.com/am-consultingai/Saleor-workspace/blob/main/EXPERIMENT.md"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2.5 rounded-full border border-white/10 bg-panel/60 px-4 py-2 no-underline transition hover:border-cyan/40"
+          >
+            <GithubMark size={18} />
+            <span className="font-mono text-xs text-subtle">
+              am-consultingai/Saleor-workspace · <span className="text-cyan/80">EXPERIMENT.md</span>
+            </span>
+          </a>
+        </Item>
+      </Stagger>
+    </SlideShell>
+  );
+}
+
+type Turn = { side: "you" | "agent"; text: string };
+
+/**
+ * One condition shown as a chat thread: the WITHOUT column piles up correction
+ * round-trips (red), WITH lands in one pass (green). The count and the thread
+ * length together make "less back-and-forth" the picture.
+ */
+function ConversationColumn({
+  variant,
+  label,
+  rounds,
+  roundsUnit,
+  turns,
+  outcome,
+}: {
+  variant: "without" | "with";
+  label: string;
+  rounds: string;
+  roundsUnit: string;
+  turns: Turn[];
+  outcome: ReactNode;
+}) {
+  const good = variant === "with";
+  return (
+    <div
+      className={`flex h-full flex-col rounded-2xl border p-5 ${
+        good ? "border-good/40 bg-tile" : "border-bad/30 bg-panel/50"
+      }`}
+    >
+      <div className="flex items-baseline justify-between">
+        <span className={`font-mono text-xs uppercase tracking-[0.2em] ${good ? "text-good" : "text-subtle"}`}>
+          {label}
+        </span>
+        <span className="font-mono text-[11px] text-subtle">
+          <span className={`font-display text-2xl font-bold ${good ? "text-good" : "text-bad"}`}>{rounds}</span>{" "}
+          {roundsUnit}
+        </span>
+      </div>
+
+      <div className="mt-3 flex flex-1 flex-col justify-center gap-2">
+        {turns.map((t, i) => {
+          const isYou = t.side === "you";
+          return (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, x: isYou ? -14 : 14, scale: 0.92 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              transition={{ delay: 0.4 + i * 0.3, type: "spring", stiffness: 380, damping: 24 }}
+              className={`max-w-[82%] rounded-xl px-3 py-1.5 font-mono text-[12px] leading-snug ${
+                isYou
+                  ? "self-start border border-white/10 bg-panel text-subtle"
+                  : good
+                    ? "self-end border border-good/30 bg-good/10 text-ink"
+                    : "self-end border border-bad/30 bg-bad/10 text-ink"
+              }`}
+            >
+              <span className="mr-1.5 opacity-50">{isYou ? "you" : "agent"}</span>
+              {t.text}
+            </motion.div>
+          );
+        })}
+      </div>
+
+      <div className="mt-3 border-t border-white/10 pt-3">{outcome}</div>
+    </div>
+  );
+}
+
+/**
+ * Experiment slide 2 — the result as a back-and-forth comparison. WITHOUT
+ * piles up correction rounds and still misses; WITH lands in one pass. The
+ * takeaway is stated outright: repo-level artifacts → smarter agent, less churn.
+ */
+function ResultSlide() {
+  return (
+    <SlideShell bg="deep">
+      <Stagger className="flex h-full flex-col">
+        <Item className="mb-2">
+          <Eyebrow>The result</Eyebrow>
+        </Item>
+        <Item>
+          <h2 className="font-display text-6xl font-bold tracking-tight text-ink">
+            Smarter agent. <GradientText>Less back-and-forth.</GradientText>
+          </h2>
+        </Item>
+        <Item>
+          <p className="mt-3 max-w-3xl text-xl font-light text-muted">
+            Same task, only the context changed — the difference is how many round-trips it takes, and whether it ships.
+          </p>
+        </Item>
+
+        <Item className="mt-5 grid flex-1 grid-cols-2 gap-8">
+          <ConversationColumn
+            variant="without"
+            label="no-setup · without"
+            rounds="6+"
+            roundsUnit="round-trips"
+            turns={[
+              { side: "you", text: "add a sustainability label" },
+              { side: "agent", text: "done — used a free-text field" },
+              { side: "you", text: "it must be a typed enum ✗" },
+              { side: "agent", text: "patched; dashboard types still fail ✗" },
+              { side: "you", text: "stale schema — regenerate the client" },
+            ]}
+            outcome={
+              <div className="flex items-center gap-2 font-display text-lg text-bad">
+                <span className="text-2xl leading-none">✗</span> badge never renders
+              </div>
+            }
+          />
+          <ConversationColumn
+            variant="with"
+            label="main · with"
+            rounds="1"
+            roundsUnit="pass"
+            turns={[
+              { side: "you", text: "add a sustainability label" },
+              { side: "agent", text: "typed enum across all 3 repos, client regenerated ✓" },
+            ]}
+            outcome={
+              <div className="flex items-center gap-3">
+                <span className="rounded-full bg-good px-3 py-1 font-mono text-xs font-semibold text-canvas-deep">
+                  🌿 Organic
+                </span>
+                <span className="font-display text-lg text-good">badge renders, first try</span>
+              </div>
+            }
+          />
+        </Item>
+
+        <Item className="mt-5">
+          <p className="text-center text-2xl font-light text-muted">
+            Maintain summary artifacts at the repo level →{" "}
+            <GradientText>a smarter agent, far less back-and-forth.</GradientText>
+          </p>
+        </Item>
+      </Stagger>
+    </SlideShell>
+  );
+}
+
 export const slides: Slide[] = [
   // ─── Title ──────────────────────────────────────────────────────────────
   <IntroSlide />,
@@ -520,6 +787,16 @@ export const slides: Slide[] = [
       { title: "Nested / forked subagents", desc: "Agents can spawn agents." },
     ]}
   />,
+
+  // ─── Proof — the A/B experiment ─────────────────────────────────────────
+  <SectionDivider
+    eyebrow="From theory to proof"
+    title="So — does any of this actually"
+    highlight="make me better?"
+    subtitle="We've engineered the context: a CLAUDE.md hierarchy, pre-computed arch/ maps, shared .claude/ commands. Enough theory — let's put it to the test."
+  />,
+  <ExperimentSlide />,
+  <ResultSlide />,
 
   // ─── Close ──────────────────────────────────────────────────────────────
   <BulletSlide
