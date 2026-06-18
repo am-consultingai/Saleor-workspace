@@ -1,0 +1,41 @@
+{
+  "brand": "AM Consulting",
+  "updated": "2026-06-16",
+  "source": "AM Consulting — Brand Guide (Google Drive, authoritative)",
+  "colors": {
+    "bg": { "base": "#0b0f19", "deep": "#070b13", "card": "#0d1321", "tile": "#0b101c" },
+    "text": { "primary": "#f3f4f6", "secondarySlate": ["#cbd5e1", "#e2e8f0"] },
+    "accent": { "cyan": "#22d3ee", "sky": "#38bdf8", "indigo": "#818cf8" },
+    "status": { "good": "#10b981", "bad": "#ef4444" },
+    "gradient": "linear-gradient(to right, #22d3ee, #38bdf8, #818cf8)"
+  },
+  "fonts": {
+    "display": "Space Grotesk",
+    "sans": "Inter",
+    "mono": "JetBrains Mono",
+    "googleImport": "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+  },
+  "identity": {
+    "company": "AM Consulting",
+    "principal": "Avishay Meron",
+    "role": "CEO & Founder",
+    "website": "https://www.amconsultingai.com",
+    "email": "office@amconsultingai.com",
+    "linkedin": "https://www.linkedin.com/in/avishay-meron/",
+    "tagline": "The model is rarely the hard part — the system around it is.",
+    "voice": "confident, technical, no-hype; peer-to-peer to senior/staff engineers; concrete numbers over buzzwords"
+  },
+  "taglines": [
+    "The model is rarely the hard part — the system around it is.",
+    "Stop reaching for GenAI by default. Start designing AI-fueled systems.",
+    "From 'which model?' to 'which system?'"
+  ],
+  "stats": { "aiPatents": "10+", "yearsTamingAI": "10+", "title": "CEO & Founder" },
+  "assets": {
+    "logo": "am-logo.png (2528x683, RGBA transparent) — primary wordmark",
+    "favicon": "am_favicon.png (128x128, RGBA)",
+    "portrait": "avishay.png (2208x1952) — Avishay Meron",
+    "note": "sits on dark backgrounds; keep transparent padding; do not place on busy imagery; TODO source vector master (SVG)"
+  },
+  "convention": "uppercase + letter-spaced JetBrains Mono for eyebrow labels and metric captions; Space Grotesk for headlines; Inter for body"
+}
